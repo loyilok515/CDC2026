@@ -1,7 +1,6 @@
 import contextlib
 import numpy as np
 from scipy.spatial.transform import Rotation as Rot
-from utils_barrier import barrier_quad
 
 @contextlib.contextmanager
 def temp_seed(seed):
@@ -13,7 +12,7 @@ def temp_seed(seed):
         np.random.set_state(state)
 
 
-def RK4(controller, trajectory_generator, UDE_activated, f, B, B_w, xinit, t_max, dt, w_MIN, w_MAX):
+def RK4(controller, trajectory_generator, UDE_activated, SO3_index, f, B, B_w, g, xinit, t_max, dt, w_MIN, w_MAX):
     t = np.arange(0, t_max, dt)
 
     # Data for states
@@ -23,11 +22,15 @@ def RK4(controller, trajectory_generator, UDE_activated, f, B, B_w, xinit, t_max
 
     # Data for controls
     u_star = []
+    u_CCM = []
     u = []
     
     # Data for UDE disturbance estimation
     d_hat_trace = []
     d_hat_err_trace = []
+
+    # Data for output deviation
+    z_err_trace = []
 
     # initialize states
     xcurr = xinit
@@ -36,14 +39,14 @@ def RK4(controller, trajectory_generator, UDE_activated, f, B, B_w, xinit, t_max
     trace_star.append(xstar_0)
     
     # Initialize quaternion from rotation matrix
-    rcurr = xcurr[6:15]
+    rcurr = xcurr[SO3_index:]
     Rcurr = rcurr.reshape(3, 3)
     rot = Rot.from_matrix(Rcurr)
     qcurr = np.roll(rot.as_quat(), 1) # Change (x, y, z, w) to (w, x, y, z)
     qcurr = np.array(qcurr).reshape(-1,1)
 
-    # Initialize UDE disturbance estimation
-    d_hat_init = np.zeros([B_w(xinit).shape[1],1])
+    # Initialize UDE disturbance estimation for force disturbances
+    d_hat_init = np.zeros([3,1])
     d_hat_curr = d_hat_init
     integral_term = np.zeros_like(d_hat_init)
     d_hat_trace.append(d_hat_init)
@@ -53,14 +56,14 @@ def RK4(controller, trajectory_generator, UDE_activated, f, B, B_w, xinit, t_max
         
         # Generate process noise
         noise = np.zeros([B_w(xinit).shape[1], 1])
-        noise = np.array([0.2, -0.3, 0.1]).reshape(-1,1) # Constant noise
-        # noise += (w_MAX-w_MIN) * np.random.rand(w_MIN.shape[0], 1) + w_MIN # Stochastic noise
+        noise += np.array([0.5, 0.5, 0.5]).reshape(-1,1) # Constant noise
+        noise += (w_MAX-w_MIN) * np.random.rand(w_MIN.shape[0], 1) + w_MIN # Stochastic noise (uniformly distributed)
 
         # States in vector space
-        vcurr = xcurr[0:6]
+        vcurr = xcurr[:SO3_index]
 
         # States in SO3
-        rcurr = xcurr[6:15]
+        rcurr = xcurr[SO3_index:]
         Rcurr = rcurr.reshape(3,3)
         roll, pitch, yaw = rot_to_euler(Rcurr)
         att_curr = np.array([roll, pitch, yaw]).reshape(-1,1)      
@@ -73,25 +76,77 @@ def RK4(controller, trajectory_generator, UDE_activated, f, B, B_w, xinit, t_max
             xstar_t, ustar_t = trajectory_generator(_t)  # Get reference trajectory and control at time t, without disturbance estimate from UDE
 
         # Runge-Kutta 4 integration
-        ui = controller(xcurr, xstar_t, ustar_t)
+        ui_desired = controller(xcurr, xstar_t, ustar_t)
 
         # Velocity-based UDE
-        ude_gain = 1.0
+        ude_gain = 2.0
         velocity_curr = xcurr[3:6]
         g_I = np.array([0., 0., -9.81]).reshape(-1,1) # Gravity vector in inertial frame
-        expected_accel = np.array([0., 0., ui[0,0]]).reshape(-1,1) if i>0 else np.zeros_like(d_hat_curr)
+        expected_accel = np.array([0., 0., ui_desired[0,0]]).reshape(-1,1) if i>0 else np.zeros_like(d_hat_curr)
         integral_term += - d_hat_curr - (g_I + Rcurr @ expected_accel) if i>0 else np.zeros_like(d_hat_curr) 
         d_hat_next = ude_gain * (integral_term*dt + velocity_curr)
         d_hat_curr = d_hat_next
-        d_hat_err = d_hat_curr - noise
-        print(f"Time: {_t:.2f}, UDE Disturbance Estimate: {d_hat_curr.flatten()}")
+        d_hat_err = d_hat_curr - noise[0:3]
+        # print(f"Time: {_t:.2f}, UDE Disturbance Estimate: {d_hat_curr.flatten()}")
         
-        # First-order lag dynamics for control input
-        tau = np.diag([0.0, 0.0, 0.0, 0.0]) # time constant for lag; adjust as needed
-        ui = ui - tau @ (ui - u[-1])/dt if i>0 else ui
-        omega_b = ui[1:4]              
+        # Actuator dynamics
+        # Force dynamics
+        tau_a = 0.3 # time constant for acceleration
+        accel_desired = ui_desired[0]
+        accel_dynamics_activated = False
+        if i>0 and accel_dynamics_activated:
+            accel_dot = 1/tau_a * (-u[-1][0] + accel_desired)
+            accel = u[-1][0] + accel_dot * dt
+        else:
+            accel = accel_desired 
 
-        vnext = rk4_step(x = xcurr, dt = dt, func = system_dynamics, u = ui, w = noise, f = f, B = B, B_w = B_w)[0:6] # [0:9]
+        # Torque dynamics
+        torque_dynamics_activated = False
+        if torque_dynamics_activated:
+            if i == 0:
+                omega = np.zeros([3, 1])
+                e_int = np.zeros([3, 1])
+            J_pred = np.diag([0.012, 0.011, 0.032]) 
+            J = np.diag([0.01, 0.01, 0.03])
+            J_inv = np.linalg.inv(J)
+
+            Kp = np.diag([0.1, 0.1, 0.1])
+            Kd = np.diag([0.005, 0.005, 0.005])
+            Ki = np.diag([0.001, 0.001, 0.001])
+
+            omega_des = ui_desired[1:4]
+
+            # desired angular acceleration (finite difference feedforward)
+            omega_des_prev = u_CCM[-1][1:4] if i > 0 else omega_des
+            omega_dot_des = (omega_des - omega_des_prev) / dt
+
+            # tracking error
+            e = omega_des - omega
+            e_dot = (e - e_prev) / dt if i>1 else np.zeros([3, 1])
+            e_int += e * dt
+            print(f"Time: {_t:.2f}, Omega tracking error: {e.flatten()}")
+
+            tau = J_pred @ omega_dot_des + np.cross(omega_des.squeeze(), (J_pred @ omega_des).squeeze()).reshape(-1, 1) + Kp @ e + Kd @ e_dot # + Ki @ e_int
+            omega_dot = J_inv @ (tau - np.cross(omega.squeeze(), (J @ omega).squeeze()).reshape(-1, 1))
+            omega = omega + omega_dot * dt
+            e_prev = e
+        else:
+            omega = ui_desired[1:4]
+
+        # Body rate control
+        ui = np.vstack([accel, omega])
+        omega_b = ui[1:4]
+        # Torque control
+        # ui = ui_desired
+        # omega_b = xcurr[6:9]
+
+        # Output
+        zcurr = g(xcurr, ui)
+        zstar = g(xstar_t, ustar_t)
+        z_err = zcurr-zstar
+
+        # ODE simulation
+        vnext = rk4_step(x = xcurr, dt = dt, func = system_dynamics, u = ui, w = noise, f = f, B = B, B_w = B_w)[:SO3_index]
         
         qnext = quat_RK4(qcurr, omega_b, K_q=100, dt=dt)
         Rnext = quat_to_dcm(qnext)
@@ -107,11 +162,13 @@ def RK4(controller, trajectory_generator, UDE_activated, f, B, B_w, xinit, t_max
         trace.append(xcurr)
         trace_att.append(att_curr)  
         u_star.append(ustar_t)
+        u_CCM.append(ui_desired)
         u.append(ui)
         d_hat_trace.append(d_hat_curr)
         d_hat_err_trace.append(d_hat_err)
+        z_err_trace.append(z_err)
 
-    return trace_star, trace, trace_att, u_star, u, d_hat_err_trace
+    return trace_star, trace, trace_att, u_star, u_CCM, u, d_hat_err_trace, z_err_trace
 
 
 # System dynamics

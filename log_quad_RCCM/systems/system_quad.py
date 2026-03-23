@@ -8,6 +8,9 @@ num_dim_control = 4
 num_dim_noise = 3
 num_dim_z = 7
 
+Q_vec = torch.tensor([1, 1, 1])
+R_vec = torch.tensor([0.2, 3.0, 3.0, 3.0])
+
 # Skew symmetric matrix from vector
 def skew(v):
     """
@@ -20,6 +23,7 @@ def skew(v):
 
 
 def S_func(x):
+    """Tangent bundle of state space"""
     bs = x.shape[0]
     
     # Extract states
@@ -76,7 +80,7 @@ def f_func(x):
 
 
 def B_func(x):
-    """Control input matrix (equivalent to gx from original class)"""
+    """Control input matrix"""
     bs = x.shape[0]
     
     # Extract states
@@ -107,8 +111,17 @@ def B_w_func(x):
     B_w[:, 3:6, :] = torch.eye(3).type(x.type()).repeat(bs, 1, 1)
     return B_w
 
+def E_w_func(x):
+    """noise input to intrinsic state"""
+    bs = x.shape[0]
+    
+    E_w = torch.zeros(bs, num_dim_manifold, num_dim_noise).type(x.type())
+    E_w[:, 3:6, :] = torch.eye(3).type(x.type()).repeat(bs, 1, 1)
+    return E_w
+
 
 def E_func(x):
+    """Control input matrix (in intrinsic states)"""
     bs = x.shape[0]
     # Extract states
     p1, p2, p3, v1, v2, v3, r1, r2, r3, r4, r5, r6, r7, r8, r9 = [x[:, i, 0] for i in range(num_dim_x)]
@@ -125,6 +138,7 @@ def E_func(x):
 
 
 def Ebot_func(x):
+    """Annihilator of E matrix"""
     bs = x.shape[0]
     # Extract states
     p1, p2, p3, v1, v2, v3, r1, r2, r3, r4, r5, r6, r7, r8, r9 = [x[:, i, 0] for i in range(num_dim_x)]
@@ -141,22 +155,39 @@ def Ebot_func(x):
     Ebot[:, 3:6, 1] = torch.bmm(R, e2).reshape(bs,3)
     return Ebot
 
+def g_func(x, u):
+    """Output function"""
+    bs = x.shape[0]
+    # Extract states
+    p1, p2, p3, v1, v2, v3, r1, r2, r3, r4, r5, r6, r7, r8, r9 = [x[:, i, 0] for i in range(num_dim_x)]
+    
+    # Extract control
+    a, omega1, omega2, omega3 = [u[:, i, 0] for i in range(num_dim_control)]
+
+    # Position states
+    x_p = torch.stack([p1, p2, p3], dim=1).reshape(bs, 3, 1)  # (bs, 3, 1)
+    u = torch.stack([a, omega1, omega2, omega3], dim=1).reshape(bs, 4, 1)  # (bs, 4, 1)
+
+    g = torch.zeros(bs, num_dim_z, 1).type(x.type())
+    Q = torch.diag(Q_vec).repeat(bs, 1, 1).type(x.type())
+    R = torch.diag(R_vec).repeat(bs, 1, 1).type(x.type())
+
+    g[:, 0:3, 0] = torch.bmm(Q, x_p).reshape(bs, 3)
+    g[:, 3:, 0] = torch.bmm(R, u).reshape(bs, 4)
+    return g
+
 def C_func(x):
-    # Compute dz_dx
+    """Compute dg/dx"""
     bs = x.shape[0]
     C = torch.zeros(bs, num_dim_z, num_dim_x).type(x.type())
-
-    Q_vec = torch.tensor([1, 1, 1])
     Q = torch.diag(Q_vec).repeat(bs, 1, 1).type(x.type())
     C[:, 0:3, 0:3] = Q
     return C
 
 def D_func(x):
-    # Compute dz_du
+    """Compute dg/du"""
     bs = x.shape[0]
     D = torch.zeros(bs, num_dim_z, num_dim_control).type(x.type())
-
-    R_vec = torch.tensor([0.15, 0.5, 0.5, 0.5])
     R = torch.diag(R_vec).repeat(bs, 1, 1).type(x.type())
-    D[:, 3:7, :] = R
+    D[:, 3:, :] = R
     return D

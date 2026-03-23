@@ -1,5 +1,6 @@
 import torch
 from torch import nn
+import torch.nn.utils as utils
 from torch.autograd import grad
 import numpy as np
 
@@ -16,11 +17,11 @@ dim_manifold_start = 6
 dim_manifold_end = 15
 
 # Control constraints in u_ccm
-T_bound = 3
+T_bound = 2
 omega_bound = 0.35
 
 # Control saturation factor
-saturation_factor = 0.1
+saturation_factor = 0.07
 
 class U_FUNC(nn.Module):
     """docstring for U_FUNC."""
@@ -64,8 +65,8 @@ class U_FUNC(nn.Module):
         bounds = torch.tensor([T_bound, omega_bound, omega_bound, omega_bound]).type(x.type()).view(1, -1, 1).expand(bs, -1, -1)
 
         # Use softer saturation to avoid sudden control cutoffs
-        # u = bounds * torch.tanh(saturation_factor * u_raw / bounds) + uref
-        u = u_raw + uref
+        u = bounds * torch.tanh(saturation_factor * u_raw / bounds) + uref
+        # u = u_raw + uref
         
         return u
 
@@ -87,19 +88,19 @@ def get_model(num_dim_x, num_dim_manifold, num_dim_control, w_lb, use_cuda=False
     # Neural controller
     c = 3 * num_dim_x
     model_u_w1 = torch.nn.Sequential(
-        torch.nn.Linear(2*dim, 128, bias=True),
+        utils.spectral_norm(torch.nn.Linear(2*dim, 128, bias=True)),
         torch.nn.Tanh(),
-        torch.nn.Linear(128, c*num_dim_manifold, bias=True))
+        utils.spectral_norm(torch.nn.Linear(128, c*num_dim_manifold, bias=True)))
 
     model_u_w2 = torch.nn.Sequential(
-        torch.nn.Linear(2*dim, 128, bias=True),
+        utils.spectral_norm(torch.nn.Linear(2*dim, 128, bias=True)),
         torch.nn.Tanh(),
-        torch.nn.Linear(128, num_dim_control*c, bias=True))
+        utils.spectral_norm(torch.nn.Linear(128, num_dim_control*c, bias=True)))
 
     # RCCM parameters
     device = torch.device("cuda" if use_cuda else "cpu")
-    param_alpha_init = torch.log(torch.exp(torch.tensor(0.7, device=device)) - 1.0)  # Inverse of softplus
-    param_miu_init = torch.log(torch.exp(torch.tensor(0.2, device=device)) - 1.0)
+    param_alpha_init = torch.log(torch.exp(torch.tensor(1.2, device=device)) - 1.0)  # Inverse of softplus
+    param_miu_init = torch.log(torch.exp(torch.tensor(0.4, device=device)) - 1.0)
     param_lambda_init = torch.log(torch.exp(torch.tensor(0.5, device=device)) - 1.0)
     param_alpha = torch.nn.Parameter(param_alpha_init)
     param_miu   = torch.nn.Parameter(param_miu_init)

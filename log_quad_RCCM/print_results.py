@@ -1,7 +1,7 @@
 import torch
 
 # Load the .pth.tar file
-checkpoint = torch.load('log_quad_constrained_RCCM/model_best.pth.tar', weights_only=False)
+checkpoint = torch.load('log_quad_constrained_noise_RCCM/model_best.pth.tar', weights_only=False)
 
 # Print the keys in the checkpoint
 epoch = checkpoint['epoch']

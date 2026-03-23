@@ -7,15 +7,15 @@ from utils import temp_seed, euler_xyz_to_rotmat
 # Training bounds for x
 pos_b = 5  # Position
 vel_b = 2  # Velocity
-roll_b = 1  # Roll (rad)
-pitch_b = 1  # Pitch (rad)
+roll_b = np.pi + 0.1  # Roll (rad)
+pitch_b = np.pi + 0.1  # Pitch (rad)
 yaw_b = np.pi + 0.1  # Yaw (rad)(Train for all possible yaw angles)
 
 X_MIN = np.array([-pos_b, -pos_b, -pos_b, -vel_b, -vel_b, -vel_b, -roll_b, -pitch_b, -yaw_b]).reshape(-1,1)
 X_MAX = np.array([pos_b, pos_b, pos_b, vel_b, vel_b, vel_b, roll_b, pitch_b, yaw_b]).reshape(-1,1)
 
 # Training bounds for xe
-pos_err_b = 1
+pos_err_b = 1.5
 vel_err_b = 0.5
 euler_err_b = 0.3  # (rad)
 
@@ -24,32 +24,32 @@ XE_MAX = np.array([pos_err_b, pos_err_b, pos_err_b, vel_err_b, vel_err_b, vel_er
 
 # Training bounds for ustar
 g = 9.81
-accel_b = 3
-omega_b = 0.1
+accel_b = 10
+omega_b = 0.3
 UREF_MIN = np.array([-accel_b+g, -omega_b, -omega_b, -omega_b]).reshape(-1,1)
 UREF_MAX = np.array([accel_b+g, omega_b, omega_b, omega_b]).reshape(-1,1)
 
 # Training bounds for w (disturbance)
-w_accel_b = 2.0
+w_accel_b = 1.0
 w_MIN = np.array([-w_accel_b, -w_accel_b, -w_accel_b]).reshape(-1,1)
 w_MAX = np.array([w_accel_b, w_accel_b, w_accel_b]).reshape(-1,1)
 
 ### Simulation parameters ###
 
 # Initial error bounds for simulations
-pos_0_err_b = 0.25
+pos_0_err_b = 1.0
 vel_0_err_b = 0.2
 euler_0_err_b = 0.1  # Euler angle initial error (XYZ convention)
 
 XE_INIT_MIN = np.array([-pos_0_err_b, -pos_0_err_b, -pos_0_err_b, -vel_0_err_b, -vel_0_err_b, -vel_0_err_b, -euler_0_err_b, -euler_0_err_b, -euler_0_err_b])
 XE_INIT_MAX = np.array([pos_0_err_b, pos_0_err_b, pos_0_err_b, vel_0_err_b, vel_0_err_b, vel_0_err_b, euler_0_err_b, euler_0_err_b, euler_0_err_b])
 
-w_accel_b_sim = 1.0
+w_accel_b_sim = 0.5
 w_sim_MIN = np.array([-w_accel_b_sim, -w_accel_b_sim, -w_accel_b_sim]).reshape(-1,1)
 w_sim_MAX = np.array([ w_accel_b_sim,  w_accel_b_sim,  w_accel_b_sim]).reshape(-1,1)
 
 # Time parameters
-time_bound = 10*np.pi
+time_bound = 10
 time_step = 0.01
 
 def system_reset(seed, trajectory_generator):

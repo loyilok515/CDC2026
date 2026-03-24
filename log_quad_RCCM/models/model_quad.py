@@ -17,7 +17,7 @@ dim_manifold_start = 6
 dim_manifold_end = 15
 
 # Control constraints in u_ccm
-T_bound = 2
+T_bound = 5
 omega_bound = 0.35
 
 # Control saturation factor
@@ -65,8 +65,8 @@ class U_FUNC(nn.Module):
         bounds = torch.tensor([T_bound, omega_bound, omega_bound, omega_bound]).type(x.type()).view(1, -1, 1).expand(bs, -1, -1)
 
         # Use softer saturation to avoid sudden control cutoffs
-        u = bounds * torch.tanh(saturation_factor * u_raw / bounds) + uref
-        # u = u_raw + uref
+        # u = bounds * torch.tanh(saturation_factor * u_raw / bounds) + uref
+        u = u_raw + uref
         
         return u
 
@@ -99,7 +99,7 @@ def get_model(num_dim_x, num_dim_manifold, num_dim_control, w_lb, use_cuda=False
 
     # RCCM parameters
     device = torch.device("cuda" if use_cuda else "cpu")
-    param_alpha_init = torch.log(torch.exp(torch.tensor(1.2, device=device)) - 1.0)  # Inverse of softplus
+    param_alpha_init = torch.log(torch.exp(torch.tensor(0.8, device=device)) - 1.0)  # Inverse of softplus
     param_miu_init = torch.log(torch.exp(torch.tensor(0.4, device=device)) - 1.0)
     param_lambda_init = torch.log(torch.exp(torch.tensor(0.5, device=device)) - 1.0)
     param_alpha = torch.nn.Parameter(param_alpha_init)

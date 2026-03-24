@@ -56,7 +56,7 @@ def RK4(controller, trajectory_generator, UDE_activated, SO3_index, f, B, B_w, g
         
         # Generate process noise
         noise = np.zeros([B_w(xinit).shape[1], 1])
-        noise += np.array([0.5, 0.5, 0.5]).reshape(-1,1) # Constant noise
+        noise += np.array([0.2, 0.3, 0.1, 0.01, 0.01, 0.01]).reshape(-1,1) # Constant noise
         noise += (w_MAX-w_MIN) * np.random.rand(w_MIN.shape[0], 1) + w_MIN # Stochastic noise (uniformly distributed)
 
         # States in vector space

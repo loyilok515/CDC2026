@@ -5,11 +5,11 @@ import numpy as np
 num_dim_x = 15
 num_dim_manifold = 9
 num_dim_control = 4
-num_dim_noise = 3
+num_dim_noise = 6
 num_dim_z = 7
 
-Q_vec = torch.tensor([1, 1, 1])
-R_vec = torch.tensor([0.2, 3.0, 3.0, 3.0])
+Q_vec = torch.tensor([1.0, 1.0, 1.0])
+R_vec = torch.tensor([0.1, 0.5, 0.5, 0.5])
 
 # Skew symmetric matrix from vector
 def skew(v):
@@ -41,6 +41,7 @@ def S_func(x):
     E3 = torch.tensor([[0, -1, 0],
                        [1, 0, 0],    
                        [0, 0, 0]]).type(x.type()).reshape(1, 3, 3).repeat(bs, 1, 1)
+                       
     RE1 = torch.bmm(R, E1).reshape(bs, 9, 1)
     RE2 = torch.bmm(R, E2).reshape(bs, 9, 1)
     RE3 = torch.bmm(R, E3).reshape(bs, 9, 1)
@@ -106,9 +107,21 @@ def B_func(x):
 def B_w_func(x):
     """noise input to state"""
     bs = x.shape[0]
+
+    # Extract states
+    p1, p2, p3, v1, v2, v3, r1, r2, r3, r4, r5, r6, r7, r8, r9 = [x[:, i, 0] for i in range(num_dim_x)]
+    p = torch.stack([p1, p2, p3], dim=1).reshape(bs, 3, 1)  # (bs, 3, 1)
+    v = torch.stack([v1, v2, v3], dim=1).reshape(bs, 3, 1)  # (bs, 3, 1)
+    r = torch.stack([r1, r2, r3, r4, r5, r6, r7, r8, r9], dim=1).reshape(bs, 9, 1)  # (bs, 9, 1)
+
+    r_row1 = torch.stack([r1, r2, r3], dim=1)  # (bs, 3)
+    r_row2 = torch.stack([r4, r5, r6], dim=1)  # (bs, 3)
+    r_row3 = torch.stack([r7, r8, r9], dim=1)  # (bs, 3)
     
     B_w = torch.zeros(bs, num_dim_x, num_dim_noise).type(x.type())
-    B_w[:, 3:6, :] = torch.eye(3).type(x.type()).repeat(bs, 1, 1)
+    B_w[:, 3:6, 0:3] = torch.eye(3).type(x.type()).repeat(bs, 1, 1)
+    B_w[:, 6:15, 3:6] = torch.cat([skew(r_row1), skew(r_row2), skew(r_row3)], dim=1)  # (bs, 9, 3)
+
     return B_w
 
 def E_w_func(x):
@@ -116,12 +129,13 @@ def E_w_func(x):
     bs = x.shape[0]
     
     E_w = torch.zeros(bs, num_dim_manifold, num_dim_noise).type(x.type())
-    E_w[:, 3:6, :] = torch.eye(3).type(x.type()).repeat(bs, 1, 1)
+    E_w[:, 3:6, 0:3] = torch.eye(3).type(x.type()).repeat(bs, 1, 1)
+    E_w[:, 6:9, 3:6] = np.sqrt(2) * torch.eye(3).type(x.type()).repeat(bs, 1, 1)
+
     return E_w
 
 
 def E_func(x):
-    """Control input matrix (in intrinsic states)"""
     bs = x.shape[0]
     # Extract states
     p1, p2, p3, v1, v2, v3, r1, r2, r3, r4, r5, r6, r7, r8, r9 = [x[:, i, 0] for i in range(num_dim_x)]

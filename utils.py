@@ -56,7 +56,7 @@ def RK4(controller, trajectory_generator, UDE_activated, SO3_index, f, B, B_w, g
         
         # Generate process noise
         noise = np.zeros([B_w(xinit).shape[1], 1])
-        noise += np.array([0.5, 0.5, 0.5]).reshape(-1,1) # Constant noise
+        noise += np.array([0.4, 0.4, 0.4, 0.01, 0.01, 0.01]).reshape(-1,1) # Constant noise
         noise += (w_MAX-w_MIN) * np.random.rand(w_MIN.shape[0], 1) + w_MIN # Stochastic noise (uniformly distributed)
 
         # States in vector space
@@ -79,7 +79,7 @@ def RK4(controller, trajectory_generator, UDE_activated, SO3_index, f, B, B_w, g
         ui_desired = controller(xcurr, xstar_t, ustar_t)
 
         # Velocity-based UDE
-        ude_gain = 2.0
+        ude_gain = 0.5
         velocity_curr = xcurr[3:6]
         g_I = np.array([0., 0., -9.81]).reshape(-1,1) # Gravity vector in inertial frame
         expected_accel = np.array([0., 0., ui_desired[0,0]]).reshape(-1,1) if i>0 else np.zeros_like(d_hat_curr)

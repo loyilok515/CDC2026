@@ -20,28 +20,31 @@ HUGE_SIZE = 25
 
 # Simulation variables
 plot_types = ['2D', '3D', 'time', 'attitude', 'error', 'control', 'control_error', 'disturbance_est_err', 'output_error'] # specify which types of plots to generate; options: '2D', '3D', 'time', 'attitude', 'error', 'control', 'control_error', 'disturbance_err'
-plot_dims_dict = {'2D': [0, 1], '3D': [0, 1, 2], 'time': [0, 1, 2], 'attitude': [0, 1, 2], 'error': [0, 1, 2, 3], \
+plot_dims_dict = {'2D': [0, 1], '3D': [0, 1, 2], 'time': [0, 1, 2], 'attitude': [0, 1, 2], 'error': [0, 1, 2], \
         'control': [1, 2, 3], 'control_error': [1, 2, 3], 'disturbance_est_err': [0, 1, 2], 'output_error': [0, 1, 2, 3, 4, 5, 6]} # specify which state dimensions to plot
 nTraj = 1 # Number of trajectories to simulate and plot
 sigma = 0.3  # Standard deviation of Gaussian noise added; 
 seed = 0  # Random seed for reproducibility
 
 # Configuration variables
-task = 'quad_noise'
-log = 'log_quad_noise_RCCM_final_normalized' # You'll need to set this to the path of your log model
+task = 'quad'
+log = 'log_quad_RCCM' # You'll need to set this to the path of your log model
 save_plot_dir = os.path.join(log, 'results/plots')  # Directory to save the plot image, e.g., 'results/plots/3D_path.png'; to show the plots instead, set to None
 save_csv_dir = os.path.join(log, 'results/csvs')  # Directory to save the csv files; 
 csv_path = os.path.join(save_csv_dir, "simulation_data.npz") # Path to zip folder
-mat_path = os.path.join(save_csv_dir, "simulation_data.mat")  # Path to mat folder
+mat_path = os.path.join(save_csv_dir, "geo_simulation_data.mat")  # Path to mat folder
 simulate = True  # Whether to run the simulation and save data to csv; if False, will load from csv if it exists
 UDE_activated = False  # UDE activation flag
+time_bound = 15  # Simulation time
+time_step = 0.01  # Simulation time step
 
 # Append system, models, config directories from log
 if not os.path.isdir(log):
     raise FileNotFoundError(f"{log} does not exist")  # Check if log exists
 sys.path.append(log + '/systems')
 sys.path.append(log + '/models')
-sys.path.append(log + '/configs')
+sys.path.append('configs')
+sys.path.append('planners')
 
 # Create directory if not exist
 if save_plot_dir is not None:
@@ -68,13 +71,12 @@ np.random.seed(seed)
 # Controller
 system = importlib.import_module('system_'+task)
 f, B, B_w, g, _, num_dim_x, num_dim_manifold, num_dim_control, num_dim_noise = get_system_wrapper(system)
-CCM_controller = get_controller_wrapper(log + '/controller_best.pth.tar')
-controller = CCM_controller
+nn_controller = get_controller_wrapper(log + '/controller_best.pth.tar')
+controller = nn_controller  # selection of feedback controller (geometric_controller, nn_controller)
 
 # Trajectory generator
-sys.path.append('planners')
 planner = importlib.import_module('planner_'+task)
-trajectory_generator = planner.forward_spiral_trajectory_generator  # hover, circular, circular_yaw_aligned
+trajectory_generator = planner.forward_spiral_trajectory_generator  # hover, circular, forward_spiral
 
 filename_training = log+'/model_best.pth.tar'
 train_data = torch.load(filename_training, map_location='cpu', weights_only=False)
@@ -82,8 +84,6 @@ print(f"Loaded model with accuracy {train_data['precs']} from Epoch {train_data[
 
 if __name__ == '__main__':
     config = importlib.import_module('config_'+task)
-    time_bound = config.time_bound
-    time_step = config.time_step
     XE_INIT_MIN = config.XE_INIT_MIN
     XE_INIT_MAX = config.XE_INIT_MAX
     w_MIN = config.w_sim_MIN

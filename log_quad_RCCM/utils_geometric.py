@@ -20,10 +20,10 @@ def vee(M):
 def geometric_controller(xcurr, xstar, ustar):
     
     # Parameters
-    e3 = np.array([0., 0. , 1.]).reshape(-1,1)
-    Kp = np.diag(np.array([0.3, 0.3, 0.6]))
-    Kv = np.diag(np.array([1., 1., 3.]))
-    Kr = np.diag(np.array([1., 1., 1.]))
+    e3 = np.array([0, 0, 1]).reshape(-1,1)
+    Kp = np.diag(np.array([0.5, 0.5, 0.5]))
+    Kv = np.diag(np.array([1., 1., 1.]))
+    Kr = np.diag(np.array([2.4, 2.4, 2.4]))
     
     # Current states
     pcurr = xcurr[0:3,:]
@@ -46,15 +46,14 @@ def geometric_controller(xcurr, xstar, ustar):
     # Thrust
     b3 = Rstar @ e3  # axis 3 in body frame
     a_des = - Kp @ err_p - Kv @ err_v + astar * (b3)
-    print(a_des)
     a = a_des.T @ b3  # Dot product
 
     # Desired attitude calculations
     z_B_des = a_des / np.linalg.norm(a_des)
-    yaw_des = np.arctan2(Rstar[2,1], Rstar[1,1])
+    yaw_des = 0.0
     x_C = np.array([np.cos(yaw_des),np.sin(yaw_des),0]).reshape(-1,1)
 
-    y_B_des = hat(z_B_des) @ x_C / (np.linalg.norm(hat(z_B_des) @ x_C) + 1e-8)
+    y_B_des = hat(z_B_des) @ x_C / (np.linalg.norm(hat(z_B_des) @ x_C))
     x_B_des = hat(y_B_des) @ z_B_des
     
     R_des = np.hstack([x_B_des, y_B_des, z_B_des])

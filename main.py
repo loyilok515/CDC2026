@@ -21,11 +21,11 @@ num_test = 1024*32  # Number of samples for testing
 learning_rate = 0.001  # Base learning rate
 epochs = 30  # Number of training epochs
 lr_step = 10  # Learning rate step
-detach_epoch = 8  # Number of epochs to detach the computation graph
+detach_epoch = 10  # Number of epochs to detach the computation graph
 _lambda_fixed = 0.5  # Convergence rate: lambda
 w_ub = 10  # Upper bound of the eigenvalue of the dual metric
-w_lb = 0.2  # Lower bound of the eigenvalue of the dual metric
-alpha_lb = 0.9  # Lower bound of the alpha parameter in RCCM
+w_lb = 0.1  # Lower bound of the eigenvalue of the dual metric
+alpha_lb = 0.7  # Lower bound of the alpha parameter in RCCM
 epsilon = _lambda_fixed * 0.1  # Ensure definiteness of LMI
 
 # Configuration variables
@@ -201,7 +201,7 @@ def forward(x, xref, uref, w, verbose=False, acc=False, detach=False):
     W = W_func(x) # W: bs x num_dim_manifold x num_dim_manifold
     M = torch.inverse(W) # M: bs x num_dim_manifold x num_dim_manifold
     S = S_func(x)
-    P_s = S # For specific systems (S.T @ )
+    P_s = S # For specific systems (S.T @ S = eye)
     P_s_T = P_s.transpose(1,2)
     f = f_func(x)
     B = B_func(x)
@@ -228,12 +228,19 @@ def forward(x, xref, uref, w, verbose=False, acc=False, detach=False):
     _lambda_nn = F.softplus(param_lambda)
     _lambda = _lambda_fixed  # _lambda = _lambda_nn
 
-    A = ( DfDx + sum([u[:, i, 0].unsqueeze(-1).unsqueeze(-1) * DBDx[:, :, :, i] for i in range(num_dim_control)])
-             + sum([w[:, i, 0].unsqueeze(-1).unsqueeze(-1) * DBwDx[:, :, :, i] for i in range(num_dim_noise)])  )
-    dot_x = f + B.matmul(u) + B_w.matmul(w)
+    if metric_type == "CCM":
+        A = ( DfDx + sum([u[:, i, 0].unsqueeze(-1).unsqueeze(-1) * DBDx[:, :, :, i] for i in range(num_dim_control)]))
+        dot_x = f + B.matmul(u)
+    elif metric_type == "RCCM":
+        A = ( DfDx + sum([u[:, i, 0].unsqueeze(-1).unsqueeze(-1) * DBDx[:, :, :, i] for i in range(num_dim_control)])
+                + sum([w[:, i, 0].unsqueeze(-1).unsqueeze(-1) * DBwDx[:, :, :, i] for i in range(num_dim_noise)])  )
+        dot_x = f + B.matmul(u) + B_w.matmul(w)
+    else:
+        raise ValueError("Metric type must be RCCM or CCM")
+    
     dot_M = weighted_gradients(M, dot_x, x, detach=detach) # DMDt
     dot_W = weighted_gradients(W, dot_x, x, detach=detach) # DWDt
-    dot_P_s_T = weighted_gradients(P_s_T, dot_x, x, detach=detach)  # DPsTdt
+    dot_P_s_T = weighted_gradients(P_s_T, dot_x, x)  # DPsTdt
 
     S_f = weighted_gradients(P_s_T, f, x).matmul(S) + P_s_T.matmul(DfDx).matmul(S)
     S_B = torch.zeros(bs, num_dim_manifold, num_dim_manifold, num_dim_control).type(x.type())
@@ -252,28 +259,41 @@ def forward(x, xref, uref, w, verbose=False, acc=False, detach=False):
         Contraction = dot_M + ((dot_P_s_T + P_s_T.matmul(A) + E.matmul(K)).matmul(S)).transpose(1,2).matmul(M) + M.matmul((dot_P_s_T + P_s_T.matmul(A) + E.matmul(K)).matmul(S)) + 2 * _lambda * M
         Contraction_dual = -dot_W + W.matmul(((dot_P_s_T + P_s_T.matmul(A) + E.matmul(K)).matmul(S)).transpose(1,2)) + ((dot_P_s_T + P_s_T.matmul(A) + E.matmul(K)).matmul(S)).matmul(W) + 2 * _lambda * W
 
-    # R1
-    RCCM_1_11 = Contraction
-    RCCM_1_12 = torch.matmul(M, E_w)
-    RCCM_1_21 = RCCM_1_12.transpose(1,2)
-    RCCM_1_22 = - _miu * torch.eye(num_dim_noise).repeat(bs, 1, 1).type(x.type())
-    RCCM_1 = torch.cat([
-        torch.cat([RCCM_1_11, RCCM_1_12], dim=2),
-        torch.cat([RCCM_1_21, RCCM_1_22], dim=2)
-    ], dim=1)
-
-    # # R2
-    # RCCM_2_11 = 2*_lambda*M - (S.transpose(1,2)).matmul((C + D.matmul(K)).transpose(1,2)).matmul(C + D.matmul(K)).matmul(S) / _alpha
-    # RCCM_2_12 = torch.zeros(bs, num_dim_manifold, num_dim_noise).type(x.type())
-    # RCCM_2_21 = RCCM_2_12.transpose(1,2)
-    # RCCM_2_22 = (_alpha - _miu) * torch.eye(num_dim_noise).repeat(bs, 1, 1).type(x.type())
-    # RCCM_2 = torch.cat([
-    #     torch.cat([RCCM_2_11, RCCM_2_12], dim=2),
-    #     torch.cat([RCCM_2_21, RCCM_2_22], dim=2)
+    # # R1
+    # R1_11 = Contraction
+    # R1_12 = torch.matmul(M, E_w)
+    # R1_21 = R1_12.transpose(1,2)
+    # R1_22 = - _miu * torch.eye(num_dim_noise).repeat(bs, 1, 1).type(x.type())
+    # R1 = torch.cat([
+    #     torch.cat([R1_11, R1_12], dim=2),
+    #     torch.cat([R1_21, R1_22], dim=2)
     # ], dim=1)
 
+    # # R2
+    # R2_11 = 2*_lambda*M - (S.transpose(1,2)).matmul((C + D.matmul(K)).transpose(1,2)).matmul(C + D.matmul(K)).matmul(S) / _alpha
+    # R2_12 = torch.zeros(bs, num_dim_manifold, num_dim_noise).type(x.type())
+    # R2_21 = R2_12.transpose(1,2)
+    # R2_22 = (_alpha - _miu) * torch.eye(num_dim_noise).repeat(bs, 1, 1).type(x.type())
+    # R2 = torch.cat([
+    #     torch.cat([R2_11, R2_12], dim=2),
+    #     torch.cat([R2_21, R2_22], dim=2)
+    # ], dim=1)
+
+    # R1 (dual-version)
+    R1_11 = Contraction_dual
+    R1_12 = E_w 
+    R1_21 = R1_12.transpose(1,2)
+    R1_22 = - _miu * torch.eye(num_dim_noise).repeat(bs, 1, 1).type(x.type())
+    R1 = torch.cat([
+        torch.cat([R1_11, R1_12], dim=2),
+        torch.cat([R1_21, R1_22], dim=2)
+    ], dim=1)
+
     # R2 (upper-left block)
-    RCCM_2 = 2*_lambda*M - (S.transpose(1,2)).matmul((C + D.matmul(K)).transpose(1,2)).matmul(C + D.matmul(K)).matmul(S) / _alpha
+    if detach:
+        R2 = 2*_lambda*M.detach() - (S.transpose(1,2)).matmul((C + D.matmul(K)).transpose(1,2)).matmul(C + D.matmul(K)).matmul(S) / _alpha
+    else:
+        R2 = 2*_lambda*M - (S.transpose(1,2)).matmul((C + D.matmul(K)).transpose(1,2)).matmul(C + D.matmul(K)).matmul(S) / _alpha
 
     # C1
     C1_inner = - weighted_gradients(W, f, x) + S_f.matmul(W) + W.matmul(S_f.transpose(1,2)) + 2 * _lambda * W
@@ -302,35 +322,35 @@ def forward(x, xref, uref, w, verbose=False, acc=False, detach=False):
     loss_C1 = loss_pos_matrix_random_sampling(-C1_LHS_1 - epsilon * torch.eye(C1_LHS_1.shape[-1]).unsqueeze(0).type(x.type()))
     loss_C2 = 4. * sum([1.*(C2**2).reshape(bs,-1).sum(dim=1).mean() for C2 in C2s])
     loss_C3 = 1. * sum([1.*(C3_inner**2).reshape(bs,-1).sum(dim=1).mean() for C3_inner in C3_inners])
-    loss_RCCM1 = loss_pos_matrix_random_sampling(-RCCM_1 - epsilon * torch.eye(RCCM_1.shape[-1]).unsqueeze(0).type(x.type()))
-    loss_RCCM2 = loss_pos_matrix_random_sampling(RCCM_2 - epsilon * torch.eye(RCCM_2.shape[-1]).unsqueeze(0).type(x.type()))
-    loss_alpha = 1. * torch.relu(_alpha - alpha_lb)
+    loss_R1 = loss_pos_matrix_random_sampling(-R1 - epsilon * torch.eye(R1.shape[-1]).unsqueeze(0).type(x.type()))
+    loss_R2 = loss_pos_matrix_random_sampling(R2 - epsilon * torch.eye(R2.shape[-1]).unsqueeze(0).type(x.type()))
+    loss_alpha = 0.5 * torch.relu(_alpha - alpha_lb)
     loss_miu = 2. * torch.relu(_miu - _alpha + epsilon)
 
-    # Monitor jacobian of neural controller
+    # # Monitor jacobian of neural controller
     # print(torch.linalg.eigvalsh(K.matmul(K.transpose(1,2)))[0])
-    # print(torch.linalg.eigvalsh(RCCM_2).min(dim=1)[0].mean().item(), torch.linalg.eigvalsh(RCCM_2).max(dim=1)[0].mean().item(), torch.linalg.eigvalsh(RCCM_2).mean().item())
+    # print(torch.linalg.eigvalsh(R2).min(dim=1)[0].mean().item(), torch.linalg.eigvalsh(R2).max(dim=1)[0].mean().item(), torch.linalg.eigvalsh(R2).mean().item())
 
     if metric_type == "CCM":
         loss = loss_CCM + loss_w_ub + loss_C1 + loss_C2
     elif metric_type == "RCCM":
-        loss = loss_CCM + loss_w_ub + loss_C1 + loss_C2 + loss_C3 + loss_RCCM1 + loss_RCCM2 + loss_alpha + loss_miu
+        loss = loss_CCM + loss_w_ub + loss_C1 + loss_C2 + loss_R1 + loss_R2 + loss_alpha + loss_miu # + loss_C3
     else:
         raise ValueError("Metric type must be RCCM or CCM")
 
     if verbose:
-        print("loss_CCM: %.6f, loss_w_ub: %.6f, loss_C1: %.6f, loss_C2: %.6f, loss_C3: %.6f, loss_RCCM1: %.6f, loss_RCCM2: %.6f, loss_alpha: %.6f, loss_miu: %.6f"%(loss_CCM.item(), loss_w_ub.item(), loss_C1.item(), loss_C2.item(), loss_C3.item(), loss_RCCM1.item(), loss_RCCM2.item(), loss_alpha.item(), loss_miu.item()))
+        print("loss_CCM: %.6f, loss_w_ub: %.6f, loss_C1: %.6f, loss_C2: %.6f, loss_C3: %.6f, loss_R1: %.6f, loss_R2: %.6f, loss_alpha: %.6f, loss_miu: %.6f"%(loss_CCM.item(), loss_w_ub.item(), loss_C1.item(), loss_C2.item(), loss_C3.item(), loss_R1.item(), loss_R2.item(), loss_alpha.item(), loss_miu.item()))
         print(torch.linalg.eigvalsh(Contraction).min(dim=1)[0].mean().item(), torch.linalg.eigvalsh(Contraction).max(dim=1)[0].mean().item(), torch.linalg.eigvalsh(Contraction).mean().item())
-        print(torch.linalg.eigvalsh(RCCM_1).min(dim=1)[0].mean().item(), torch.linalg.eigvalsh(RCCM_1).max(dim=1)[0].mean().item(), torch.linalg.eigvalsh(RCCM_1).mean().item())
-        print(torch.linalg.eigvalsh(RCCM_2).min(dim=1)[0].mean().item(), torch.linalg.eigvalsh(RCCM_2).max(dim=1)[0].mean().item(), torch.linalg.eigvalsh(RCCM_2).mean().item())
+        print(torch.linalg.eigvalsh(R1).min(dim=1)[0].mean().item(), torch.linalg.eigvalsh(R1).max(dim=1)[0].mean().item(), torch.linalg.eigvalsh(R1).mean().item())
+        print(torch.linalg.eigvalsh(R2).min(dim=1)[0].mean().item(), torch.linalg.eigvalsh(R2).max(dim=1)[0].mean().item(), torch.linalg.eigvalsh(R2).mean().item())
     if acc:
         return (loss, 
                ((torch.linalg.eigvalsh(Contraction, UPLO='L') >= 0).sum(dim=1) == 0).cpu().detach().numpy(), 
                ((torch.linalg.eigvalsh(C1_LHS_1, UPLO='L') >= 0).sum(dim=1) == 0).cpu().detach().numpy(), 
                sum([4.*(C2**2).reshape(bs,-1).sum(dim=1).mean() for C2 in C2s]).item(), 
                sum([1.*(C3**2).reshape(bs,-1).sum(dim=1).mean() for C3 in C3s]).item(), 
-               ((torch.linalg.eigvalsh(RCCM_1, UPLO='L') >= 0).sum(dim=1) == 0).cpu().detach().numpy(),
-               ((torch.linalg.eigvalsh(RCCM_2, UPLO='L') <= 0).sum(dim=1) == 0).cpu().detach().numpy()
+               ((torch.linalg.eigvalsh(R1, UPLO='L') >= 0).sum(dim=1) == 0).cpu().detach().numpy(),
+               ((torch.linalg.eigvalsh(R2, UPLO='L') <= 0).sum(dim=1) == 0).cpu().detach().numpy()
                )
     else:
         return loss, None, None, None, None, None, None
@@ -392,7 +412,7 @@ def trainval(X, bs=bs, train=True, acc=False, detach=False): # trainval a set of
     return total_loss / len(X), total_p1 / len(X), total_p2 / len(X), total_l3 / len(X), total_l4 / len(X), total_r5 / len(X), total_r6 / len(X)
 
 
-best_acc = 0
+best_loss = 100
 
 def adjust_learning_rate(optimizer, epoch):
     """Sets the learning rate to the initial LR decayed by every lr_step epochs"""
@@ -420,8 +440,8 @@ for epoch in range(0, epochs):
             f"alpha = {alpha_curr.item():.6f}, miu = {miu_curr.item():.6f}, lambda = {lambda_curr.item():.6f}\n"
         )
 
-    if p1+p2+r5+r6 >= best_acc:
-        best_acc = p1 + p2 + r5 + r6
+    if loss <= best_loss:
+        best_loss = loss
         filename = log+'/model_best.pth.tar'
         filename_controller = log+'/controller_best.pth.tar'
         torch.save({

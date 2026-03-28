@@ -54,10 +54,16 @@ def RK4(controller, trajectory_generator, UDE_activated, SO3_index, f, B, B_w, g
 
     for i in range(len(t)):
         
+        # Current time
+        _t = dt*i
+
         # Generate process noise
         noise = np.zeros([B_w(xinit).shape[1], 1])
-        noise += np.array([0.4, 0.4, 0.4, 0.01, 0.01, 0.01]).reshape(-1,1) # Constant noise
-        noise += (w_MAX-w_MIN) * np.random.rand(w_MIN.shape[0], 1) + w_MIN # Stochastic noise (uniformly distributed)
+        disturbance_force = (0.8+0.2*np.sin(0.2*np.pi*_t))*np.array([0.6, 0.7, 0.3])
+        disturbance_rate = (0.5+0.5*np.sin(2*np.pi*_t))*np.array([0.1, 0.1, 0.2])
+        noise += np.concatenate([disturbance_force, disturbance_rate]).reshape(-1,1)
+        # noise += np.array([0.4, 0.4, 0.4, 0.01, 0.01, 0.01]).reshape(-1,1) # Constant noise
+        # noise += (w_MAX-w_MIN) * np.random.rand(w_MIN.shape[0], 1) + w_MIN # Stochastic noise (uniformly distributed)
 
         # States in vector space
         vcurr = xcurr[:SO3_index]
@@ -69,7 +75,6 @@ def RK4(controller, trajectory_generator, UDE_activated, SO3_index, f, B, B_w, g
         att_curr = np.array([roll, pitch, yaw]).reshape(-1,1)      
 
         # Get reference trajectory and control
-        _t = dt*i  # Current time
         if UDE_activated == True:
             xstar_t, ustar_t = trajectory_generator(_t, dist_est=d_hat_curr)  # Get reference trajectory and control at time t, with disturbance estimate from UDE
         else:

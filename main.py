@@ -30,8 +30,8 @@ epsilon = _lambda_fixed * 0.1  # Ensure definiteness of LMI
 
 # Configuration variables
 task = 'quad'  # Name of the model
-log = 'log_quad_CCM'  # Path to a directory for storing the training log
-metric_type = 'CCM'  # Train for robust CCM or CCM
+log = 'log_quad_RCCM'  # Path to a directory for storing the training log
+metric_type = 'RCCM'  # Train for robust CCM or CCM
 log_record_file = log+'/training_log.txt'  # Text file for training log
 use_cuda = True  # Set to False to disable CUDA
 

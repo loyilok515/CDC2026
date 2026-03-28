@@ -46,6 +46,23 @@ sys.path.append(log + '/models')
 sys.path.append('configs')
 sys.path.append('planners')
 
+# Controller
+nn_controller = get_controller_wrapper(log + '/controller_best.pth.tar')
+controller = nn_controller  # selection of feedback controller (geometric_controller, nn_controller)
+
+# Trajectory generator
+planner = importlib.import_module('planner_'+task)
+trajectory_generator = planner.forward_spiral_trajectory_generator  # hover, circular, forward_spiral
+
+# Load system
+system = importlib.import_module('system_'+task)
+f, B, B_w, g, _, num_dim_x, num_dim_manifold, num_dim_control, num_dim_noise = get_system_wrapper(system)
+
+# Load training data
+filename_training = log+'/model_best.pth.tar'
+train_data = torch.load(filename_training, map_location='cpu', weights_only=False)
+print(f"Loaded model with accuracy {train_data['precs']} from Epoch {train_data['epoch']}") 
+
 # Create directory if not exist
 if save_plot_dir is not None:
     os.makedirs(save_plot_dir, exist_ok=True)
@@ -67,20 +84,6 @@ bottom = 0.17  # the bottom of the subplots of the figure
 top = 0.925     # the top of the subplots of the figure
 
 np.random.seed(seed)
-
-# Controller
-system = importlib.import_module('system_'+task)
-f, B, B_w, g, _, num_dim_x, num_dim_manifold, num_dim_control, num_dim_noise = get_system_wrapper(system)
-nn_controller = get_controller_wrapper(log + '/controller_best.pth.tar')
-controller = nn_controller  # selection of feedback controller (geometric_controller, nn_controller)
-
-# Trajectory generator
-planner = importlib.import_module('planner_'+task)
-trajectory_generator = planner.forward_spiral_trajectory_generator  # hover, circular, forward_spiral
-
-filename_training = log+'/model_best.pth.tar'
-train_data = torch.load(filename_training, map_location='cpu', weights_only=False)
-print(f"Loaded model with accuracy {train_data['precs']} from Epoch {train_data['epoch']}") 
 
 if __name__ == '__main__':
     config = importlib.import_module('config_'+task)

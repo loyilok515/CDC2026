@@ -1,5 +1,5 @@
 torch
 tqdm
 numpy
-matplotlib
 scipy
+matplotlib

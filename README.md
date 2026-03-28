@@ -5,7 +5,7 @@ Pytorch and Matlab implementation of the CDC2026 paper "Neural Robust Control on
 The codes are developed based on the CoRL'20 paper "[Learning Certified Control Using Contraction Metric](https://arxiv.org/abs/2011.12569)", by Dawei Sun, Susmit Jha, and Chuchu Fan.
 
 ## Supplementary documents
-The implementation details of the test cases and extra proofs can be found [in this document]().
+The implementation details of the test cases and extra proofs can be found [in this document](Neural_Robust_Control_on_Lie_Groups_Using_Contraction_Methods_(Extended_Version).pdf).
 
 ## Requirements
 Dependencies include ```torch```, ```tqdm```, ```numpy```, ```scipy```, and ```matplotlib```. You can install them using the following command.
@@ -81,9 +81,11 @@ python3 plot.py
 This runs a closed-loop simulation with the learned feedback controller stored in the training log using an RK4 solver. The UDE can be turned on/off to compare the performance of the controller. Plots are saved in [log_quad_RCCM/results/plots](log_quad_RCCM/results/plots) and CSV files are saved in [log_quad_RCCM/results/csvs](log_quad_RCCM/results/csvs) by default. 
 
 ## Matlab plots
-To visualize the trajectories and create plots used in our paper, run the [MATLAB codes]() provided in the repository. 
+To visualize the trajectories and create plots used in our paper, run the [MATLAB codes](Matlab_plots/CDC_plot_graph.m) provided in the repository. 
 
-To visualize simulation of your own, the CSV files in .mat format generated in [log_quad_RCCM/results/csvs](log_quad_RCCM/results/csvs) need to be stored in [CDC_plots](). 
+To visualize simulation of your own, the CSV files in .mat format generated in [log_quad_RCCM/results/csvs](log_quad_RCCM/results/csvs) need to be stored in [Matlab_plots](Matlab_plots). 
 
-Finally, run ```plot_graphs.m```.
+Change the name of the .mat file at the beginning of the Matlab scripts to the one newly created. 
+
+Finally, run ```CDC_plot_graph.m```.
 

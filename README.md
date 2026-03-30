@@ -1,11 +1,11 @@
 # Neural Robust Control on Lie Groups Using Contraction Methods
 Pytorch and Matlab implementation of the CDC2026 paper "Neural Robust Control on Lie Groups Using Contraction Methods", by Yi Lok Lo, Longhao Qian and Hugh H.T. Liu
 
+## Extended version of paper
+The implementation details of the test cases and extra proofs can be found [in this document](Neural_Robust_Control_on_Lie_Groups_Using_Contraction_Methods_(Extended_Version).pdf).
+
 ## Acknowledgement
 The codes are developed based on the CoRL'20 paper "[Learning Certified Control Using Contraction Metric](https://arxiv.org/abs/2011.12569)", by Dawei Sun, Susmit Jha, and Chuchu Fan.
-
-## Supplementary documents
-The implementation details of the test cases and extra proofs can be found [in this document](Neural_Robust_Control_on_Lie_Groups_Using_Contraction_Methods_(Extended_Version).pdf).
 
 ## Requirements
 Dependencies include ```torch```, ```tqdm```, ```numpy```, ```scipy```, and ```matplotlib```. You can install them using the following command.

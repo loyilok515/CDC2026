@@ -1,7 +1,7 @@
 # Neural Robust Control on Lie Groups Using Contraction Methods
 Pytorch and Matlab implementation of the CDC2026 paper "Neural Robust Control on Lie Groups Using Contraction Methods", by Yi Lok Lo, Longhao Qian and Hugh H.T. Liu
 
-![Quadrotor flying a spiral pattern.](figures/spiral.pdf)
+![Quadrotor flying a spiral pattern.](figures/spiral.png)
 
 
 ## Extended version of paper

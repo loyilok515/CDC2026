@@ -93,3 +93,55 @@ ax_inset.FontSize = 10;
 ax_inset.FontWeight = 'bold';
 
 annotation('arrow',[0.14 0.20],[0.54 0.63])
+
+%% Control input
+RCCM_UDE_Tstar = squeeze(RCCM_UDE_sim_data.u_stars(1,:,1));
+RCCM_UDE_T = squeeze(RCCM_UDE_sim_data.controls(1,:,1));
+RCCM_UDE_omegastar = squeeze(RCCM_UDE_sim_data.u_stars(1,:,2:4));
+RCCM_UDE_omega = squeeze(RCCM_UDE_sim_data.controls(1,:,2:4));
+
+f3 = figure(3);
+f3.Renderer = 'Painters';
+hold on
+grid on
+axis([0, 15, 6, 14])
+plot(t,RCCM_UDE_Tstar, 'k--', DisplayName='Nominal thurst input $f_t^*$', LineWidth=1.5)
+plot(t,RCCM_UDE_T, Color='b', DisplayName='RCCM with UDE thrust input $f_t$')
+
+xlabel('Time ($s$)', 'Interpreter','latex', 'FontSize', 13)
+ylabel('Mass-normalized thrust input $f_t/m$ $(m/s^{-2})$', 'Interpreter','latex', 'FontSize', 13)
+lgd = legend('Interpreter','Latex', 'FontSize', 12);
+
+f4 = figure(4);
+f4.Renderer = 'Painters';
+hold on
+grid on
+axis([0, 15, -1, 1])
+plot(t,RCCM_UDE_omegastar(:,1), 'r--', DisplayName='Nominal roll rate', LineWidth=1.5)
+plot(t,RCCM_UDE_omegastar(:,2), 'g--', DisplayName='Nominal pitch rate', LineWidth=1.5)
+plot(t,RCCM_UDE_omegastar(:,3), 'b--', DisplayName='Nominal yaw rate', LineWidth=1.5)
+plot(t,RCCM_UDE_omega(:,1), 'r', DisplayName='Roll rate')
+plot(t,RCCM_UDE_omega(:,2), 'g', DisplayName='Pitch rate')
+plot(t,RCCM_UDE_omega(:,3), 'b', DisplayName='Yaw rate')
+
+xlabel('Time ($s$)', 'Interpreter','latex', 'FontSize', 13)
+ylabel('Body angular rate $\omega_B$ $(rad/s)$', 'Interpreter','latex', 'FontSize', 13)
+lgd = legend('Interpreter','Latex', 'FontSize', 12);
+
+
+%% Disturbance Estimation Error
+RCCM_UDE_dist_err = squeeze(RCCM_UDE_sim_data.d_hat_errors);
+
+f5 = figure(5);
+f5.Renderer = 'Painters';
+hold on
+grid on
+axis([0, 15, -0.5, 1.5])
+plot(t,RCCM_UDE_dist_err(:,1), 'r', DisplayName='Force estimate error $f_{d,1}-\hat{f}_{d,1}$')
+plot(t,RCCM_UDE_dist_err(:,2), 'g', DisplayName='Force estimate error $f_{d,2}-\hat{f}_{d,2}$')
+plot(t,RCCM_UDE_dist_err(:,3), 'b', DisplayName='Force estimate error $f_{d,3}-\hat{f}_{d,3}$')
+
+
+xlabel('Time ($s$)', 'Interpreter','latex', 'FontSize', 13)
+ylabel('Disturbance force estimate error $f_d-\hat{f}_d$ $(N)$', 'Interpreter','latex', 'FontSize', 13)
+lgd = legend('Interpreter','Latex', 'FontSize', 12);

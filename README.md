@@ -8,7 +8,7 @@ Pytorch and Matlab implementation of the CDC2026 paper "Neural Robust Control on
 
 
 ## Extended version of paper
-The implementation details of the test cases and extra proofs can be found [in this document](Neural_Robust_Control_on_Lie_Groups_Using_Contraction_Methods_(Extended_Version).pdf).
+The implementation details of the test cases and extra proofs can be found in our arXiv paper "[Neural Robust Control on Lie Groups Using Contraction Methods (Extended Version)](https://arxiv.org/abs/2604.01448)".
 
 ## Acknowledgement
 The codes are developed based on the CoRL'20 paper "[Learning Certified Control Using Contraction Metric](https://arxiv.org/abs/2011.12569)", by Dawei Sun, Susmit Jha, and Chuchu Fan.
